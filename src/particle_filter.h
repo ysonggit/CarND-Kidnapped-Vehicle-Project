@@ -10,6 +10,7 @@
 #define PARTICLE_FILTER_H_
 
 #include "helper_functions.h"
+#include <iostream>
 
 struct Particle {
 
@@ -23,8 +24,6 @@ struct Particle {
 	std::vector<double> sense_y;
 };
 
-
-
 class ParticleFilter {
 	
 	// Number of particles to draw
@@ -37,7 +36,7 @@ class ParticleFilter {
 	
 	// Vector of weights of all particles
 	std::vector<double> weights;
-	
+    
 public:
 	
 	// Set of current particles
@@ -115,6 +114,8 @@ public:
 	const bool initialized() const {
 		return is_initialized;
 	}
+    
+    void printParticles();
 };
 
 
