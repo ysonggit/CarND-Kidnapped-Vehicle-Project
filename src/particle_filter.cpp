@@ -114,18 +114,74 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         for(auto lm : map_landmarks.landmark_list){
             double lm_dist = dist(lm.x_f, lm.y_f, p.x, p.y);
             if (lm_dist <= sensor_range){
-                predictions_in_range.push_back(LandmarkObs(lm.id, lm,x_f, lm.y_f));
+                LandmarkObs lm_obs;
+                lm_obs.id = lm.id_i;
+                lm_obs.x = lm.x_f;
+                lm_obs.y = lm.y_f;
+                predictions_in_range.push_back(lm_obs);
             }
         }
+        // translate observations from vehicle coordinate to map coordinate
+        vector<LandmarkObs> transformed_obs;
+        for(auto obs : observations){
+            double x_map = p.x + (cos(p.theta) * obs.x) - (sin(p.theta) * obs.y);
+            double y_map = p.y + (sin(p.theta) * obs.x) + (cos(p.theta) * obs.y);
+            LandmarkObs trans_obs;
+            trans_obs.id = obs.id;
+            trans_obs.x = x_map;
+            trans_obs.y = y_map;
+            transformed_obs.push_back(trans_obs);
+        }
+        // compute weights
+        dataAssociation(predictions_in_range, transformed_obs);
+        p.weight = 1.0;
+        double coefficient = 1.0/(2 * M_PI * std_landmark[0] * std_landmark[1]);
+        for(auto obs: transformed_obs){
+            // x and y are the observations in map coordinates from landmarks
+            double x = obs.x;
+            double y = obs.y;
+            // mu_x and mu_y are the coordinates of the nearest landmarks
+            double mu_x = 0.0, mu_y = 0.0;
+            for(auto pred: predictions_in_range){
+                if (pred.id == obs.id){
+                    mu_x = pred.x;
+                    mu_y = pred.y;
+                    break;
+                }
+            }
+            double a = pow((x-mu_x),2)/(2*pow(std_landmark[0],2));
+            double b = pow((y-mu_y),2)/(2*pow(std_landmark[1],2));
+            // weight equal to multivariate Gaussia products
+            p.weight *= coefficient * exp(-(a+b));
+        }
     }
-    
 }
 
 void ParticleFilter::resample() {
 	// TODO: Resample particles with replacement with probability proportional to their weight. 
 	// NOTE: You may find std::discrete_distribution helpful here.
 	//   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
+    vector<Particle> sampled_particles;
+    vector<double> weights;
+    for(auto p : particles){
+        weights.push_back(p.weight);
+    }
+    default_random_engine gen;
+    uniform_int_distribution<int> dist_int(0, num_particles-1); // uniformly distributed on the closed interval [a, b]
 
+    auto index = dist_int(gen);
+    double w_max = *max_element(weights.begin(), weights.end());
+    uniform_real_distribution<double> dist_double (0.0, 2*w_max);
+    double beta = 0.0;
+    for (int i = 0; i<num_particles; i++){
+        beta += dist_double(gen);
+        while(weights[index] < beta){
+            beta -= weights[index];
+            index = (index+1) % num_particles;
+        }
+        sampled_particles.push_back(particles[index]);
+    }
+    particles = sampled_particles;
 }
 
 void ParticleFilter::SetAssociations(Particle& particle, const std::vector<int>& associations, 
